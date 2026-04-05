@@ -1,0 +1,131 @@
+{
+  "name": "app-modernizer",
+  "displayName": "App Modernizer",
+  "description": "GitHub Copilot Extension for converting legacy SOAP and REST APIs to modern OpenAPI specs, GraphQL schemas, and ROA-standard APIs",
+  "version": "0.1.0",
+  "publisher": "prasune",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "copilot",
+    "openapi",
+    "graphql",
+    "soap",
+    "rest",
+    "api",
+    "modernization",
+    "roa"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "appmod",
+        "name": "appmod",
+        "fullName": "App Modernizer",
+        "description": "Convert legacy SOAP and REST APIs to modern OpenAPI specs or GraphQL schemas",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "analyze",
+            "description": "Analyze workspace endpoints to detect SOAP and REST APIs"
+          },
+          {
+            "name": "generate-openapi",
+            "description": "Generate OpenAPI spec from analyzed endpoints (ROA standard)"
+          },
+          {
+            "name": "generate-graphql",
+            "description": "Generate GraphQL schema from analyzed endpoints"
+          },
+          {
+            "name": "configure-roa",
+            "description": "Configure company-specific ROA standards"
+          },
+          {
+            "name": "generate-code",
+            "description": "Generate code implementation using OpenAPI Generator"
+          },
+          {
+            "name": "convert",
+            "description": "Run the full conversion pipeline"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "appmod.openSettings",
+        "title": "App Modernizer: Open Settings",
+        "category": "App Modernizer"
+      },
+      {
+        "command": "appmod.selectSourceFolder",
+        "title": "App Modernizer: Select Source Folder",
+        "category": "App Modernizer"
+      },
+      {
+        "command": "appmod.selectTargetFolder",
+        "title": "App Modernizer: Select Target Folder",
+        "category": "App Modernizer"
+      }
+    ],
+    "configuration": {
+      "title": "App Modernizer",
+      "properties": {
+        "appmod.roaStandards": {
+          "type": "object",
+          "default": {},
+          "description": "Company-specific ROA (Resource Oriented Architecture) standards configuration"
+        },
+        "appmod.preferredModel": {
+          "type": "string",
+          "default": "gpt-4o",
+          "enum": [
+            "gpt-4o",
+            "claude-3.5-sonnet",
+            "o1-preview",
+            "o1-mini"
+          ],
+          "description": "Preferred Copilot model for analysis tasks"
+        },
+        "appmod.sourceFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Source workspace folder containing legacy APIs"
+        },
+        "appmod.targetFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Target workspace folder for generated output"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "build": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.93.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}
