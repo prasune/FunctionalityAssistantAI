@@ -1,0 +1,76 @@
+{
+  "name": "springboot-integration-test-generator",
+  "displayName": "Spring Boot Integration Test Generator",
+  "description": "GitHub Copilot Chat extension that generates Spring Boot integration tests with WireMock virtualization from Splunk/local log files",
+  "version": "0.1.0",
+  "publisher": "prasune",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prasune/FunctionalityAssistantAI"
+  },
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Testing"
+  ],
+  "keywords": [
+    "copilot",
+    "chat",
+    "spring-boot",
+    "integration-test",
+    "wiremock",
+    "splunk"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "extensionDependencies": [
+    "github.copilot-chat"
+  ],
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "springboot-test-gen.integrationtest",
+        "fullName": "Integration Test Generator",
+        "name": "integrationtest",
+        "description": "Generate Spring Boot integration tests with WireMock from Splunk/local log files. Attach a log file to get started!",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "generate",
+            "description": "Generate integration tests from an attached log file for a given API URL"
+          },
+          {
+            "name": "analyze",
+            "description": "Analyze an attached log file and show extracted API calls and downstream dependencies"
+          },
+          {
+            "name": "help",
+            "description": "Show usage instructions and supported log formats"
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
+    "lint": "eslint src --ext ts",
+    "build": "webpack --mode production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.93.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "ts-loader": "^9.5.0",
+    "typescript": "^5.3.0",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.0"
+  }
+}

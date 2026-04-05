@@ -1,0 +1,17 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "module"
+  },
+  "plugins": ["@typescript-eslint"],
+  "rules": {
+    "@typescript-eslint/naming-convention": "off",
+    "semi": ["error", "always"],
+    "curly": "warn",
+    "eqeqeq": "warn",
+    "no-throw-literal": "warn"
+  },
+  "ignorePatterns": ["dist/**", "node_modules/**", "webpack.config.js"]
+}
