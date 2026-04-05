@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { DetectedEndpoint, SourceApiType, ObjectDefinition, FieldDefinition } from '../types';
+import { DetectedEndpoint, SourceApiType, LegacyResponsePattern, ObjectDefinition, FieldDefinition } from '../types';
 
 /** Patterns used to identify SOAP endpoints in source code */
 const SOAP_INDICATORS = [
@@ -231,18 +231,26 @@ Respond with a structured analysis in markdown format.`;
             sourceType = (SourceApiType as Record<string, SourceApiType>)[typeStr] || SourceApiType.UNKNOWN;
         }
 
+        const apiNameMatch = section.match(/api\s*name[:\s]+[`]?([\w-]+)[`]?/i);
+        const apiVersionMatch = section.match(/(?:api\s*)?version[:\s]+[`]?(v?\d+[\w.]*)[`]?/i);
+        const legacyPattern = this.parseLegacyPattern(section);
+
         return {
             filePath: fileMatch ? fileMatch[1] : '',
             className: classMatch[1],
             methodName: '',
             sourceType,
+            apiName: apiNameMatch ? apiNameMatch[1] : undefined,
+            apiVersion: apiVersionMatch ? apiVersionMatch[1] : undefined,
             httpMethod: methodMatch ? methodMatch[1].toUpperCase() : undefined,
             path: pathMatch ? pathMatch[1] : undefined,
             requestObjects: this.parseObjects(section, 'request'),
             responseObjects: this.parseObjects(section, 'response'),
+            errorObjects: this.parseObjects(section, 'error'),
             dependentObjects: this.parseObjects(section, 'dependent'),
             annotations: this.parseAnnotations(section),
             parentClasses: this.parseParentClasses(section),
+            legacyPattern,
             rawContent: section
         };
     }
@@ -308,6 +316,20 @@ Respond with a structured analysis in markdown format.`;
         }
 
         return [...new Set(annotations)];
+    }
+
+    private parseLegacyPattern(section: string): LegacyResponsePattern {
+        const lower = section.toLowerCase();
+        if (lower.includes('always_200') || lower.includes('always 200') || lower.includes('embedded_error') || lower.includes('embedded error')) {
+            return LegacyResponsePattern.ALWAYS_200_EMBEDDED_ERROR;
+        }
+        if (lower.includes('mvc_model_error') || lower.includes('modelandview') && (lower.includes('error') || lower.includes('fault'))) {
+            return LegacyResponsePattern.MVC_MODEL_ERROR;
+        }
+        if (lower.includes('soap_fault') || lower.includes('soap fault') || lower.includes('soapfault')) {
+            return LegacyResponsePattern.SOAP_FAULT;
+        }
+        return LegacyResponsePattern.STANDARD;
     }
 
     private parseParentClasses(section: string): string[] {

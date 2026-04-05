@@ -50,7 +50,10 @@ export class AppModChatParticipant {
                 await this.handleAnalyze(request, stream, token);
                 break;
             case 'generate-openapi':
-                await this.handleGenerateOpenApi(request, context, stream, token);
+                await this.handleGenerateOpenApi(request, context, stream, token, TargetApiType.ROA_REST_API);
+                break;
+            case 'generate-openapi-xapi':
+                await this.handleGenerateOpenApi(request, context, stream, token, TargetApiType.ROA_REST_XAPI);
                 break;
             case 'generate-graphql':
                 await this.handleGenerateGraphQL(request, context, stream, token);
@@ -116,10 +119,11 @@ export class AppModChatParticipant {
             stream.markdown(fullResponse);
             stream.markdown('\n\n---\n');
             stream.markdown('**Next steps:**\n');
-            stream.markdown('- Use `@appmod /generate-openapi` to generate an OpenAPI spec (API or xAPI)\n');
+            stream.markdown('- Use `@appmod /generate-openapi` to generate a Backend API OpenAPI spec\n');
+            stream.markdown('- Use `@appmod /generate-openapi-xapi` to generate an Experience Layer (xAPI) OpenAPI spec\n');
             stream.markdown('- Use `@appmod /generate-graphql` to generate a GraphQL schema\n');
             stream.markdown('- Use `@appmod /configure-roa` to set company-specific ROA standards\n');
-            stream.markdown('- Use `@appmod /convert` to run the full conversion pipeline\n');
+            stream.markdown('- Use `@appmod /convert <ApiName>` to run the full conversion pipeline for a specific API\n');
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             stream.markdown(`❌ Error during analysis: ${errorMessage}`);
@@ -130,13 +134,11 @@ export class AppModChatParticipant {
         request: vscode.ChatRequest,
         context: vscode.ChatContext,
         stream: vscode.ChatResponseStream,
-        token: vscode.CancellationToken
+        token: vscode.CancellationToken,
+        targetType: TargetApiType
     ): Promise<void> {
-        stream.progress('Preparing OpenAPI specification generation...');
-
-        const userPrompt = request.prompt.trim().toLowerCase();
-        const isXApi = userPrompt.includes('xapi') || userPrompt.includes('experience');
-        const targetType = isXApi ? TargetApiType.ROA_REST_XAPI : TargetApiType.ROA_REST_API;
+        const isXApi = targetType === TargetApiType.ROA_REST_XAPI;
+        stream.progress(`Preparing ${isXApi ? 'xAPI' : 'Backend API'} OpenAPI specification generation...`);
 
         const roaStandards = this.roaConfig.getStandards();
         const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -351,14 +353,33 @@ export class AppModChatParticipant {
         stream: vscode.ChatResponseStream,
         token: vscode.CancellationToken
     ): Promise<void> {
-        stream.progress('Starting full conversion pipeline...');
+        const userPrompt = request.prompt.trim();
+        const userPromptLower = userPrompt.toLowerCase();
 
-        const userPrompt = request.prompt.trim().toLowerCase();
+        // Parse API name from user prompt — it's required
+        const apiName = this.extractApiName(userPrompt);
+        if (!apiName) {
+            stream.markdown('## Usage: `@appmod /convert <ApiName> [options]`\n\n');
+            stream.markdown('Please provide the **API name** to convert. Examples:\n\n');
+            stream.markdown('```\n');
+            stream.markdown('@appmod /convert OrderService\n');
+            stream.markdown('@appmod /convert PaymentAPI graphql\n');
+            stream.markdown('@appmod /convert CustomerService xapi\n');
+            stream.markdown('```\n\n');
+            stream.markdown('The API name is used to:\n');
+            stream.markdown('- Filter and focus analysis on endpoints belonging to that API\n');
+            stream.markdown('- Handle multiple SOAP API versions in the same project\n');
+            stream.markdown('- Name the generated specification file\n');
+            stream.markdown('\n**Tip:** Run `@appmod /analyze` first to see all detected APIs in your workspace.\n');
+            return;
+        }
+
+        stream.progress(`Starting conversion pipeline for: ${apiName}...`);
 
         let targetType = TargetApiType.ROA_REST_API;
-        if (userPrompt.includes('graphql')) {
+        if (userPromptLower.includes('graphql')) {
             targetType = TargetApiType.GRAPHQL;
-        } else if (userPrompt.includes('xapi') || userPrompt.includes('experience')) {
+        } else if (userPromptLower.includes('xapi') || userPromptLower.includes('experience')) {
             targetType = TargetApiType.ROA_REST_XAPI;
         }
 
@@ -374,6 +395,7 @@ export class AppModChatParticipant {
             await this.pipelineEngine.executePipeline(
                 sourceFolder,
                 targetType,
+                apiName,
                 request,
                 context,
                 stream,
@@ -383,6 +405,25 @@ export class AppModChatParticipant {
             const errorMessage = error instanceof Error ? error.message : String(error);
             stream.markdown(`❌ Pipeline error: ${errorMessage}`);
         }
+    }
+
+    private extractApiName(prompt: string): string | null {
+        const trimmed = prompt.trim();
+        if (!trimmed) {
+            return null;
+        }
+
+        // Remove known option keywords to isolate the API name
+        const optionKeywords = ['graphql', 'xapi', 'experience', 'api', 'rest', 'soap'];
+        const words = trimmed.split(/\s+/);
+        const nameWords = words.filter(w => !optionKeywords.includes(w.toLowerCase()));
+
+        if (nameWords.length === 0) {
+            return null;
+        }
+
+        // Take the first non-option word as the API name
+        return nameWords[0];
     }
 
     private async handleFreeformQuery(
@@ -429,18 +470,25 @@ I can help you convert legacy SOAP and REST APIs to modern API standards.
 
 **Available commands:**
 - \`@appmod /analyze\` — Scan your workspace for SOAP and REST endpoints
-- \`@appmod /generate-openapi\` — Generate OpenAPI spec (add "xapi" for experience layer)
+- \`@appmod /generate-openapi\` — Generate Backend API OpenAPI spec (ROA standard)
+- \`@appmod /generate-openapi-xapi\` — Generate Experience Layer (xAPI) OpenAPI spec
 - \`@appmod /generate-graphql\` — Generate GraphQL schema
 - \`@appmod /configure-roa\` — Configure company-specific ROA standards
 - \`@appmod /generate-code\` — Generate implementation code using OpenAPI Generator
-- \`@appmod /convert\` — Run the full conversion pipeline
+- \`@appmod /convert <ApiName>\` — Run the full conversion pipeline for a specific API
 
 **Target API types:**
 - **API** — Backend ROA-standard REST API with OpenAPI spec
 - **xAPI** — Experience layer API with session handling and consumer headers
 - **GraphQL** — GraphQL schema with types, queries, and mutations
 
-**Tip:** Start by running \`@appmod /analyze\` to detect your legacy endpoints, then choose your target format.`;
+**Handles legacy patterns:**
+- SOAP APIs with multiple versions in the same project
+- REST APIs that always return HTTP 200 with errors embedded in the response body
+- MVC endpoints using ModelAndView with error attributes in the view model
+- SOAP fault responses mapped to proper HTTP exception responses
+
+**Tip:** Start by running \`@appmod /analyze\` to detect your legacy endpoints, then use \`@appmod /convert <ApiName>\` to convert a specific API.`;
     }
 
     private extractPreviousAnalysis(context: vscode.ChatContext): string {

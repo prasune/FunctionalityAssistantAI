@@ -39,7 +39,11 @@
           },
           {
             "name": "generate-openapi",
-            "description": "Generate OpenAPI spec from analyzed endpoints (ROA standard)"
+            "description": "Generate Backend API OpenAPI spec from analyzed endpoints (ROA standard)"
+          },
+          {
+            "name": "generate-openapi-xapi",
+            "description": "Generate Experience Layer (xAPI) OpenAPI spec with session handling and consumer headers"
           },
           {
             "name": "generate-graphql",
@@ -55,7 +59,7 @@
           },
           {
             "name": "convert",
-            "description": "Run the full conversion pipeline"
+            "description": "Run the full conversion pipeline for a specific API (provide API name)"
           }
         ]
       }

@@ -70,6 +70,7 @@ export class PipelineEngine {
     async executePipeline(
         sourceFolder: string,
         targetType: TargetApiType,
+        apiName: string,
         request: vscode.ChatRequest,
         _context: vscode.ChatContext,
         stream: vscode.ChatResponseStream,
@@ -79,6 +80,7 @@ export class PipelineEngine {
         let currentStep = 0;
 
         stream.markdown('## App Modernizer — Conversion Pipeline\n\n');
+        stream.markdown(`**API:** ${apiName}\n`);
         stream.markdown(`**Target:** ${this.getTargetLabel(targetType)}\n`);
         stream.markdown(`**Source:** ${sourceFolder}\n\n`);
         stream.markdown('---\n\n');
@@ -88,7 +90,7 @@ export class PipelineEngine {
         stream.progress(`Step ${currentStep}/${totalSteps}: Analyzing endpoints...`);
         stream.markdown(`### Step ${currentStep}: Endpoint Analysis\n\n`);
 
-        const analysisResult = await this.executeAnalysisStep(sourceFolder, stream, token);
+        const analysisResult = await this.executeAnalysisStep(sourceFolder, apiName, stream, token);
         if (token.isCancellationRequested) {
             return;
         }
@@ -124,12 +126,12 @@ export class PipelineEngine {
 
         if (targetType === TargetApiType.GRAPHQL) {
             stream.markdown(`### Step ${currentStep}: GraphQL Schema Generation\n\n`);
-            await this.executeGraphQLGenerationStep(sourceFolder, analysisResult, stream, token);
+            await this.executeGraphQLGenerationStep(sourceFolder, analysisResult, stream, token, apiName);
         } else {
             const typeLabel = targetType === TargetApiType.ROA_REST_XAPI ? 'xAPI' : 'API';
             stream.markdown(`### Step ${currentStep}: OpenAPI Specification Generation (${typeLabel})\n\n`);
             await this.executeOpenApiGenerationStep(
-                sourceFolder, targetType, analysisResult, stream, token
+                sourceFolder, targetType, analysisResult, stream, token, apiName
             );
         }
 
@@ -159,10 +161,11 @@ export class PipelineEngine {
 
     private async executeAnalysisStep(
         sourceFolder: string,
+        apiName: string,
         stream: vscode.ChatResponseStream,
         token: vscode.CancellationToken
     ): Promise<string> {
-        const analysisPrompt = this.promptBuilder.buildAnalysisPrompt(sourceFolder);
+        const analysisPrompt = this.promptBuilder.buildAnalysisPrompt(sourceFolder, apiName);
 
         try {
             const models = await vscode.lm.selectChatModels({
@@ -226,7 +229,8 @@ export class PipelineEngine {
         targetType: TargetApiType,
         previousAnalysis: string,
         stream: vscode.ChatResponseStream,
-        token: vscode.CancellationToken
+        token: vscode.CancellationToken,
+        apiName?: string
     ): Promise<void> {
         const roaStandards = this.roaConfig.getStandards();
         const generatePrompt = this.promptBuilder.buildOpenApiGenerationPrompt(
@@ -234,7 +238,8 @@ export class PipelineEngine {
             targetType,
             roaStandards,
             previousAnalysis,
-            ''
+            '',
+            apiName
         );
 
         try {
@@ -270,12 +275,14 @@ export class PipelineEngine {
         sourceFolder: string,
         previousAnalysis: string,
         stream: vscode.ChatResponseStream,
-        token: vscode.CancellationToken
+        token: vscode.CancellationToken,
+        apiName?: string
     ): Promise<void> {
         const generatePrompt = this.promptBuilder.buildGraphQLGenerationPrompt(
             sourceFolder,
             previousAnalysis,
-            ''
+            '',
+            apiName
         );
 
         try {

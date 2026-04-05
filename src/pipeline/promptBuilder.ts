@@ -9,9 +9,18 @@ export class PromptBuilder {
     /**
      * Build the initial analysis prompt that scans workspace for endpoints.
      */
-    buildAnalysisPrompt(sourceFolder: string): string {
-        return `You are an expert Java/Kotlin API analyst. Analyze the source code in the workspace folder "${sourceFolder}" to identify ALL API endpoints.
+    buildAnalysisPrompt(sourceFolder: string, apiName?: string): string {
+        const apiFilter = apiName
+            ? `\n\n## IMPORTANT: Focus on API "${apiName}"
+Filter the analysis to focus on endpoints belonging to the "${apiName}" API. This includes:
+- Classes with "${apiName}" in the name or package path
+- Endpoints in the same module/package as ${apiName}
+- Related services, controllers, and endpoints for this API
+- If multiple versions exist (e.g., v1, v2), identify ALL versions and note the version for each endpoint\n`
+            : '';
 
+        return `You are an expert Java/Kotlin API analyst. Analyze the source code in the workspace folder "${sourceFolder}" to identify ALL API endpoints.
+${apiFilter}
 ## Your Task
 Scan every class in the codebase and identify whether it is a SOAP endpoint, REST MVC endpoint, plain REST endpoint, or not an endpoint.
 
@@ -26,6 +35,7 @@ SOAP endpoints may NOT have obvious annotations. Look for:
 5. Classes extending SpringBeanAutowiringSupport or similar WS base classes
 6. Custom framework annotations that wrap SOAP functionality
 7. Any class that processes XML-based request/response through SOAP protocol
+8. **IMPORTANT: Multiple SOAP API versions** — the same project may have v1, v2, etc. of the same SOAP API. Identify the version from package names, WSDL namespaces, or class naming conventions. Report each version separately.
 
 ### REST MVC Endpoint Detection
 Look for:
@@ -41,12 +51,43 @@ Look for:
 3. JAX-RS annotations (@Path, @GET, @POST, etc.)
 4. Methods returning ResponseEntity, @ResponseBody annotated methods
 
+## CRITICAL: Legacy Response Pattern Detection
+Many legacy APIs have non-standard error handling. You MUST identify these patterns:
+
+### Pattern 1: Always HTTP 200 with Embedded Errors
+Legacy REST APIs that ALWAYS return HTTP 200, even for errors. The error information is embedded in the response body:
+- Look for response wrapper classes with fields like: \`status\`, \`errorCode\`, \`errorMessage\`, \`success\`, \`errors\`, \`resultCode\`
+- Look for logic like: \`if (error) { response.setStatus("FAILURE"); response.setErrorCode(...) }\` but still returning 200
+- These need to be converted to proper HTTP error responses (400, 404, 500, etc.) with the error fields mapped to a separate error response schema
+
+### Pattern 2: MVC ModelAndView with Embedded Errors
+Similar to Pattern 1 but in MVC controllers:
+- ModelAndView that adds error attributes: \`modelAndView.addObject("error", ...)\`, \`modelAndView.addObject("errorMessage", ...)\`
+- The "success" data and "error" data are mixed in the same ModelAndView
+- Error attributes need to be extracted and mapped to proper exception responses
+
+### Pattern 3: SOAP Fault Responses
+SOAP endpoints with fault definitions:
+- WSDL fault elements
+- Custom SOAP fault classes
+- SOAPFaultException handling
+- These MUST be mapped to proper HTTP exception responses (not embedded in the success response)
+
+For each endpoint, identify which legacy pattern it uses:
+- **ALWAYS_200_EMBEDDED_ERROR**: REST API returns 200 with error in body
+- **MVC_MODEL_ERROR**: ModelAndView mixes success/error data
+- **SOAP_FAULT**: SOAP fault definitions
+- **STANDARD**: Normal HTTP error handling
+
 ## For Each Endpoint Found, Report:
 
 ### Endpoint Details
 - **File path** (relative to workspace)
 - **Class name** and **method name**
+- **API name** (logical API group this endpoint belongs to)
+- **API version** (v1, v2, etc. if applicable)
 - **Type**: SOAP / REST_MVC / REST_PLAIN
+- **Legacy pattern**: ALWAYS_200_EMBEDDED_ERROR / MVC_MODEL_ERROR / SOAP_FAULT / STANDARD
 - **HTTP method** and **URL path** (if REST)
 - **Associated WSDL/XSD** (if SOAP)
 - **All annotations** on the class and method
@@ -68,9 +109,16 @@ For EVERY request parameter, request body, and SOAP input:
 ### Response Objects (CRITICAL - be thorough)
 Same level of detail as request objects for:
 - Return type of the method
-- ModelAndView attributes (if MVC)
+- ModelAndView attributes (if MVC) — **list ALL model attributes separately**
 - SOAP output message types
 - Response wrapper types
+- **Separate success fields from error fields** — clearly indicate which fields are part of the success response and which are error indicators
+
+### Error/Fault Objects (CRITICAL for legacy pattern conversion)
+- For ALWAYS_200_EMBEDDED_ERROR: List the error fields from the response wrapper (errorCode, errorMessage, status, etc.)
+- For MVC_MODEL_ERROR: List the error-related ModelAndView attributes
+- For SOAP_FAULT: List the fault elements, fault codes, and fault detail types
+- These will be converted to separate exception response schemas in the modern API
 
 ### Dependent Objects
 Any related types referenced by request/response objects:
@@ -82,6 +130,7 @@ Any related types referenced by request/response objects:
 ## Output Format
 Use a clear markdown structure with headers for each endpoint.
 List ALL fields — do not summarize or abbreviate.
+Group endpoints by API name and version.
 
 START ANALYSIS NOW by reading the workspace files.`;
     }
@@ -94,15 +143,17 @@ START ANALYSIS NOW by reading the workspace files.`;
         targetType: TargetApiType,
         roaStandards: RoaStandards,
         previousAnalysis: string,
-        userPrompt: string
+        userPrompt: string,
+        apiName?: string
     ): string {
         const isXApi = targetType === TargetApiType.ROA_REST_XAPI;
         const apiTypeLabel = isXApi ? 'Experience Layer API (xAPI)' : 'Backend API';
+        const apiScope = apiName ? ` for the "${apiName}" API` : '';
 
         return `You are an expert API architect specializing in OpenAPI specifications and ROA (Resource Oriented Architecture) standards.
 
 ## Task
-Generate a COMPLETE OpenAPI 3.0.3 specification for a ${apiTypeLabel} by converting legacy endpoints found in "${sourceFolder}".
+Generate a COMPLETE OpenAPI 3.0.3 specification for a ${apiTypeLabel}${apiScope} by converting legacy endpoints found in "${sourceFolder}".
 
 ## Previous Analysis Results
 ${previousAnalysis || 'No previous analysis available. You must analyze the source code directly.'}
@@ -156,6 +207,30 @@ ${Object.entries(roaStandards.headers.standard).map(([k, v]) => `- ${k}: ${v}`).
 4. ETag support for caching
 5. Content negotiation via Accept header`}
 
+## CRITICAL: Legacy Response Pattern Handling
+Many legacy APIs have non-standard error handling that MUST be converted properly:
+
+### Always-200 APIs (ALWAYS_200_EMBEDDED_ERROR)
+Legacy APIs that always return HTTP 200 with errors embedded in the response body:
+- **Split the response**: Extract error fields (errorCode, errorMessage, status, etc.) into SEPARATE error response schemas
+- **Map to proper HTTP status codes**: Create 400, 404, 409, 422, 500 responses with the error schema
+- **Clean the success response**: The 200 response should ONLY contain the actual success data fields
+- Example: If legacy response has {data: {...}, errorCode: "...", errorMessage: "..."}, create:
+  - 200 response with just the data fields
+  - 400/500 responses with ProblemDetail + errorCode and errorMessage
+
+### MVC ModelAndView Errors (MVC_MODEL_ERROR)
+MVC endpoints that mix success and error data in ModelAndView:
+- **Separate model attributes**: Extract error-related attributes into error response schemas
+- **Map view names to responses**: Success view → 200 response, error view → appropriate error response
+- **Extract all attributes**: Every addObject() call in the controller is a field in the response
+
+### SOAP Fault Responses (SOAP_FAULT)
+SOAP endpoints with fault definitions:
+- **Map SOAP faults to HTTP errors**: Each fault type → appropriate HTTP error response
+- **Preserve fault detail**: Fault code, fault string, fault detail → error response schema fields
+- **Create exception schemas**: Each distinct SOAP fault type → separate error response schema
+
 ## CRITICAL: Request/Response Accuracy
 The #1 requirement is ACCURACY of all request and response objects:
 1. Include EVERY field from every request/response object
@@ -166,6 +241,7 @@ The #1 requirement is ACCURACY of all request and response objects:
 6. Capture collection types with correct item schemas
 7. Include all enums with their values
 8. Do NOT skip or summarize any fields
+9. **Separate success response fields from error/fault fields** — they must be in different schemas
 
 ## Type Mapping (Java → OpenAPI)
 - String → string
@@ -191,6 +267,10 @@ Generate a COMPLETE OpenAPI 3.0.3 YAML spec. Include:
 5. Security schemes
 6. Common error responses (400, 401, 403, 404, 500) using ${roaStandards.errorHandling.format} format
 
+7. For ALWAYS_200_EMBEDDED_ERROR endpoints: Split the response into success (200) and error schemas
+8. For SOAP_FAULT endpoints: Map each fault type to a specific HTTP error response
+9. For MVC_MODEL_ERROR endpoints: Separate model attributes into success response and error response schemas
+
 Read the workspace source files to ensure accuracy. Output ONLY valid YAML.`;
     }
 
@@ -200,12 +280,15 @@ Read the workspace source files to ensure accuracy. Output ONLY valid YAML.`;
     buildGraphQLGenerationPrompt(
         sourceFolder: string,
         previousAnalysis: string,
-        userPrompt: string
+        userPrompt: string,
+        apiName?: string
     ): string {
+        const apiScope = apiName ? ` for the "${apiName}" API` : '';
+
         return `You are an expert GraphQL architect.
 
 ## Task
-Generate a COMPLETE GraphQL schema by converting legacy endpoints found in "${sourceFolder}".
+Generate a COMPLETE GraphQL schema${apiScope} by converting legacy endpoints found in "${sourceFolder}".
 
 ## Previous Analysis Results
 ${previousAnalysis || 'No previous analysis available. Analyze the source code directly.'}
@@ -237,6 +320,24 @@ ${userPrompt || 'Generate the schema based on all detected endpoints.'}
 - Map → JSON scalar or custom type
 - Enum → GraphQL enum
 
+## Legacy Pattern Handling in GraphQL
+
+### Always-200 APIs → GraphQL
+- Do NOT replicate the embedded error pattern
+- Success fields → return type
+- Error fields → GraphQL errors with extensions containing errorCode, errorMessage
+- Use union types if the response has distinct success/error shapes
+
+### MVC ModelAndView → GraphQL
+- Model success attributes → return type fields
+- Model error attributes → GraphQL errors
+- Each distinct ModelAndView composition → separate return type
+
+### SOAP Faults → GraphQL
+- Fault types → GraphQL error extensions
+- Fault codes → error extension codes
+- Do NOT include fault fields in the return type
+
 ## Conversion Rules
 ### SOAP → GraphQL
 - Read operations → Queries
@@ -244,7 +345,7 @@ ${userPrompt || 'Generate the schema based on all detected endpoints.'}
 - Complex types → Object types
 - WSDL input messages → Input types
 - WSDL output messages → Return types
-- SOAP faults → GraphQL errors
+- SOAP faults → GraphQL errors (NOT in return types)
 
 ### REST → GraphQL
 - GET → Queries
@@ -333,11 +434,12 @@ Include the OpenAPI Generator commands and configuration.`;
 
 ## Available Commands
 - /analyze — Detect endpoints in workspace
-- /generate-openapi — Generate OpenAPI spec (add "xapi" for experience layer)
+- /generate-openapi — Generate Backend API OpenAPI spec
+- /generate-openapi-xapi — Generate Experience Layer (xAPI) OpenAPI spec
 - /generate-graphql — Generate GraphQL schema
 - /configure-roa — Set company ROA standards
 - /generate-code — Generate implementation code
-- /convert — Full conversion pipeline
+- /convert <ApiName> — Full conversion pipeline for a specific API
 
 ## Previous Context
 ${previousContext || 'No previous context.'}

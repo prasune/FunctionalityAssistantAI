@@ -136,14 +136,23 @@ ${mutations}`;
                 .map(obj => `    - ${obj.name}: ${obj.fields.map(f => `${f.name}:${f.type}`).join(', ')}`)
                 .join('\n');
 
+            const errorFields = ep.errorObjects
+                .flatMap(obj => obj.fields.map(f => `    - ${f.name}: ${f.type}`))
+                .join('\n');
+
             return `### Endpoint ${i + 1}: ${ep.className}.${ep.methodName}
 - Source Type: ${ep.sourceType}
+- Legacy Pattern: ${ep.legacyPattern}
+- API Name: ${ep.apiName || 'N/A'}
+- API Version: ${ep.apiVersion || 'N/A'}
 - HTTP Method: ${ep.httpMethod || 'N/A'}
 - Path: ${ep.path || 'N/A'}
 - Request Objects:
 ${requestFields || '    (none)'}
 - Response Objects:
 ${responseFields || '    (none)'}
+- Error/Fault Objects:
+${errorFields || '    (none)'}
 - Dependent Types:
 ${dependentTypes || '    (none)'}`;
         }).join('\n\n');

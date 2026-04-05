@@ -152,8 +152,15 @@ security:
                 .map(obj => `    - ${obj.name}: ${obj.fields.map(f => f.name + ':' + f.type).join(', ')}`)
                 .join('\n');
 
+            const errorFields = ep.errorObjects
+                .flatMap(obj => obj.fields.map(f => `    - ${f.name}: ${f.type}`))
+                .join('\n');
+
             return `### Endpoint ${i + 1}: ${ep.className}.${ep.methodName}
 - Source Type: ${ep.sourceType}
+- Legacy Pattern: ${ep.legacyPattern}
+- API Name: ${ep.apiName || 'N/A'}
+- API Version: ${ep.apiVersion || 'N/A'}
 - HTTP Method: ${ep.httpMethod || 'N/A'}
 - Path: ${ep.path || 'N/A'}
 - WSDL: ${ep.wsdlPath || 'N/A'}
@@ -163,6 +170,8 @@ security:
 ${requestFields || '    (none detected)'}
 - Response Objects:
 ${responseFields || '    (none detected)'}
+- Error/Fault Objects:
+${errorFields || '    (none detected)'}
 - Dependent Objects:
 ${dependentTypes || '    (none detected)'}`;
         }).join('\n\n');
@@ -307,6 +316,7 @@ ${Object.entries(standards.headers.standard).map(([k, v]) => `   - ${k}: ${v}`).
             const allObjects = [
                 ...ep.requestObjects,
                 ...ep.responseObjects,
+                ...ep.errorObjects,
                 ...ep.dependentObjects
             ];
 

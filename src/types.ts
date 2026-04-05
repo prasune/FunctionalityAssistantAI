@@ -13,21 +13,37 @@ export enum TargetApiType {
     GRAPHQL = 'graphql'
 }
 
+/** Detected legacy response patterns that need special handling */
+export enum LegacyResponsePattern {
+    /** API always returns HTTP 200 with error details embedded in success response body */
+    ALWAYS_200_EMBEDDED_ERROR = 'always_200_embedded_error',
+    /** SOAP fault response that needs mapping to HTTP error responses */
+    SOAP_FAULT = 'soap_fault',
+    /** MVC ModelAndView with error attributes embedded in the view model */
+    MVC_MODEL_ERROR = 'mvc_model_error',
+    /** Standard HTTP error responses (no special handling needed) */
+    STANDARD = 'standard'
+}
+
 /** Represents a detected endpoint in the source code */
 export interface DetectedEndpoint {
     filePath: string;
     className: string;
     methodName: string;
     sourceType: SourceApiType;
+    apiName?: string;
+    apiVersion?: string;
     httpMethod?: string;
     path?: string;
     wsdlPath?: string;
     schemaPath?: string;
     requestObjects: ObjectDefinition[];
     responseObjects: ObjectDefinition[];
+    errorObjects: ObjectDefinition[];
     dependentObjects: ObjectDefinition[];
     annotations: string[];
     parentClasses: string[];
+    legacyPattern: LegacyResponsePattern;
     rawContent: string;
 }
 
@@ -119,6 +135,7 @@ export interface PipelineContext {
     sourceFolder: string;
     targetFolder: string;
     targetApiType: TargetApiType;
+    apiName: string;
     detectedEndpoints: DetectedEndpoint[];
     roaStandards: RoaStandards;
     generatedSpec?: string;
@@ -132,6 +149,7 @@ export interface ConversionOptions {
     sourceFolder: string;
     targetFolder: string;
     targetType: TargetApiType;
+    apiName: string;
     roaStandards?: Partial<RoaStandards>;
     includeCodeGeneration: boolean;
     selectedEndpoints?: string[];
