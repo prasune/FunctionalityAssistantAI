@@ -348,6 +348,10 @@ ${assertionMethods}
 
   /**
    * Generate the WireMock configuration class.
+   * 
+   * Note: The actual WireMock server lifecycle is managed by @AutoConfigureWireMock
+   * on the IntegrationTestSuite class. This config class provides additional
+   * test properties for redirecting downstream URLs to the WireMock server.
    */
   private generateWireMockConfig(): { className: string; packageName: string; sourceCode: string } {
     const className = 'WireMockConfig';
@@ -355,31 +359,31 @@ ${assertionMethods}
 
     const sourceCode = `package ${packageName};
 
-import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.client.RestTemplate;
 
 /**
- * WireMock configuration for integration tests.
- * Provides a configured WireMock server for downstream service mocking.
+ * WireMock test configuration for integration tests.
+ * 
+ * The WireMock server lifecycle is managed automatically by
+ * {@code @AutoConfigureWireMock} on the IntegrationTestSuite class.
+ * This configuration provides helper beans for tests that need
+ * programmatic access to the WireMock port or downstream base URL.
  */
 @TestConfiguration
 public class ${className} {
 
+    @Value("\${wiremock.server.port}")
+    private int wireMockPort;
+
     /**
-     * WireMock server bean configured for downstream service mocking.
-     * The server runs on port ${this.config.wireMockPort} and is auto-configured
-     * via @AutoConfigureWireMock in the IntegrationTestSuite.
+     * Returns the base URL of the WireMock server.
+     * Useful for delegation classes that need to construct full downstream URLs.
      */
-    @Bean(destroyMethod = "stop")
-    public WireMockServer wireMockServer() {
-        WireMockServer server = new WireMockServer(
-            WireMockConfiguration.wireMockConfig()
-                .port(${this.config.wireMockPort})
-        );
-        server.start();
-        return server;
+    public String getWireMockBaseUrl() {
+        return "http://localhost:" + wireMockPort;
     }
 }
 `;

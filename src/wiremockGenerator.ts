@@ -1,4 +1,4 @@
-import { HttpCall, WireMockStub, HttpHeader } from './types';
+import { HttpCall, WireMockStub } from './types';
 
 /**
  * Generates WireMock stub Java code from parsed downstream HTTP calls.
@@ -38,7 +38,6 @@ export class WireMockGenerator {
    */
   private generateStubJavaCode(call: HttpCall, stubName: string): string {
     const lines: string[] = [];
-    const methodLower = call.method.toLowerCase();
     const wireMockMethod = this.getWireMockMethodName(call.method);
 
     lines.push(`    // Stub: ${call.method} ${call.path}`);
