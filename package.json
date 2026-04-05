@@ -117,15 +117,11 @@
     "build": "tsc -p ./"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.56.0",
     "typescript": "^5.3.0"
-  },
-  "dependencies": {
-    "js-yaml": "^4.1.0"
   }
 }
